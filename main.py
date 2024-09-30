@@ -5,6 +5,15 @@ import pygame
 import sys
 from dataclasses import dataclass
 
+from agent import RandomAgent
+
+
+# 💆‍ Need to integrate the step function so that the agent can play the game.
+# Fixed Action being None
+# Need to add in state representation
+# Get reward working using the scoring change
+# Improve gameplay to make more challenging.
+# Need to change the way the platforms are spawning to make it more difficult.
 
 @dataclass
 class GameConfig:
@@ -43,8 +52,8 @@ class Player(pygame.sprite.Sprite):
         if self.rect.bottom >= self.config.HEIGHT:
             self.player_alive = False
 
-    def update(self, platforms):
-        self.player_input()
+    def update(self, platforms, action):
+        self.player_input(action)
         self.apply_gravity()
         self.apply_move()
         self.check_platform_collision(platforms)
@@ -64,17 +73,18 @@ class Player(pygame.sprite.Sprite):
 
         self.prev_y = self.rect.y
 
-    def player_input(self):
+    def player_input(self, action):
         keys = pygame.key.get_pressed()
         if keys[pygame.K_SPACE] and self.on_platform:
             self.jump()
-        elif keys[pygame.K_RIGHT]:
+        elif keys[pygame.K_RIGHT] or action == 'RIGHT':
             self.horizontal_vel = self.config.HORIZONTAL_VEL
-        elif keys[pygame.K_LEFT]:
+        elif keys[pygame.K_LEFT] or action == 'LEFT':
             self.horizontal_vel = -self.config.HORIZONTAL_VEL
 
         if self.horizontal_vel > self.config.MAX_HORIZONTAL_VEL:
             self.horizontal_vel = self.config.MAX_HORIZONTAL_VEL
+
         if self.horizontal_vel < -self.config.MAX_HORIZONTAL_VEL:
             self.horizontal_vel = -self.config.MAX_HORIZONTAL_VEL
 
@@ -127,18 +137,18 @@ class DoodleJumpEnv:
 
         return None
 
-    def step(self, action):
-        state = None
-        reward = 0
-        self.done = False
-        return state, reward, self.done
-
-    def render_and_update(self, screen):
-        self.all_sprites.update(self.all_platforms)
+    def step(self, screen, action=None):
+        self.all_sprites.update(self.all_platforms, action)
         self.spawn_new_platforms()
         screen.fill((255, 255, 255))
         self.all_platforms.draw(screen)
         self.all_sprites.draw(screen)
+
+        state = None
+        reward = 0
+        self.done = False
+
+        return state, reward, self.done
 
     def spawn_initial_platforms(self, num):
         platforms = []
@@ -185,9 +195,11 @@ class Platform(pygame.sprite.Sprite):
             self.kill()
 
 
-def main():
+def main(agent_play=False):
     screen = initialize_game()
     env = DoodleJumpEnv()
+    if agent_play:
+        agent = RandomAgent()
     state = env.reset()
 
     clock = pygame.time.Clock()  # Add clock for FPS control
@@ -201,10 +213,10 @@ def main():
                 running = False
 
         if game_active:
-            action = None
-            state, reward, done = env.step(action)
+            if agent_play:
+                action = agent.choose_action()
 
-            env.render_and_update(screen)
+            state, reward, done = env.step(screen, action)
 
             # Check player alive
             if not env.player.player_alive:
@@ -215,7 +227,7 @@ def main():
             screen.fill((255, 255, 255))
             env.draw_score(screen)
             keys = pygame.key.get_pressed()
-            if keys[pygame.K_SPACE]:  # If we press spacebar we restart
+            if keys[pygame.K_SPACE]:  # If we press space_bar we restart
                 game_active = True
                 env.reset()
 
@@ -229,4 +241,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(agent_play=True)
