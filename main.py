@@ -1,17 +1,17 @@
 import os
 import random
-
+import numpy as np
 import pygame
 import sys
 from dataclasses import dataclass
-
+from PIL import Image
 from agent import RandomAgent
 
 
 # 💆‍ Need to integrate the step function so that the agent can play the game.
-# Fixed Action being None
-# Need to add in state representation
-# Get reward working using the scoring change
+# Fixed Action being None ✅
+# Need to add in state representation ✅
+# Get reward working using the scoring change ✅
 # Improve gameplay to make more challenging.
 # Need to change the way the platforms are spawning to make it more difficult.
 
@@ -24,7 +24,17 @@ class GameConfig:
     HORIZONTAL_VEL: int = 6
     MAX_HORIZONTAL_VEL: int = 6
     FRICTION: float = 0.8
-    MIN_PLATFORM_SPACING: int = 80
+
+    # << ----------------------- PLATFORMS
+    MIN_VERT_PLATFORM_SPACING: int = 80
+    MAX_VERT_PLATFORM_SPACING: int = 120
+    MIN_HORIZ_PLATFORM_SPACING: int = 40
+    MAX_HORIZ_PLATFORM_SPACING: int = 60
+
+    # Platform difficulty progression parameters
+    DIFFICULTY_INCREASE_RATE: float = 0.01  # Rate at which platform spacing increases with score
+
+
     FPS: int = 60  # Add FPS to the config
 
 
@@ -57,9 +67,11 @@ class Player(pygame.sprite.Sprite):
         self.apply_gravity()
         self.apply_move()
         self.check_platform_collision(platforms)
-        self.scroll_screen(platforms)
+        reward = self.scroll_screen(platforms)
+        return reward
 
     def scroll_screen(self, platforms):
+        score_change = 0  # For scoring we set to zero first
         if self.rect.top < self.config.HEIGHT // 2:
             y_change = self.prev_y - self.rect.y
 
@@ -68,10 +80,13 @@ class Player(pygame.sprite.Sprite):
                     platform.scroll_down(y_change)
 
                 if self.rect.y < self.highest_y:
-                    self.score += self.highest_y - self.rect.y
+                    score_change = (self.highest_y - self.rect.y) / 10  # Scoring
+                    self.score += score_change
                     self.highest_y = self.rect.y
 
         self.prev_y = self.rect.y
+
+        return score_change  # Return our change in score for reward
 
     def player_input(self, action):
         keys = pygame.key.get_pressed()
@@ -129,8 +144,8 @@ class DoodleJumpEnv:
     def reset(self):
         self.done = False
         self.player = Player()
-        self.all_sprites = pygame.sprite.Group()
-        self.all_sprites.add(self.player)
+        # self.all_sprites = pygame.sprite.Group()
+        # self.all_sprites.add(self.player)
         self.all_platforms = pygame.sprite.Group()
         self.spawn_initial_platforms(4)
         self.player.jump()
@@ -138,35 +153,81 @@ class DoodleJumpEnv:
         return None
 
     def step(self, screen, action=None):
-        self.all_sprites.update(self.all_platforms, action)
+
+        reward = self.player.update(self.all_platforms, action)
         self.spawn_new_platforms()
         screen.fill((255, 255, 255))
         self.all_platforms.draw(screen)
-        self.all_sprites.draw(screen)
 
-        state = None
-        reward = 0
+        screen.blit(self.player.image, self.player.rect)
+
+        state = self.get_rgb_screen(screen)  # Capture the current screen state
+
         self.done = False
 
         return state, reward, self.done
 
+    def get_rgb_screen(self, screen):
+        """Method to return RGB version of the screen."""
+        screen_rgb = pygame.surfarray.array3d(screen)  # Capture screen
+        screen_rgb = np.transpose(screen_rgb, (1, 0, 2))  # Convert array to match PIL's format (w, h, RGB)
+        image = Image.fromarray(screen_rgb)   # Convert NumPy array to a PIL Image
+        # image.show()  # Use this to examine
+        return image
+
     def spawn_initial_platforms(self, num):
-        platforms = []
+        """Spawns a fixed number of platforms at the start of the game, with controlled vertical spacing."""
+        last_platform_y = self.config.HEIGHT - 50  # Start the first platform near the bottom of the screen
+
         for _ in range(num):
-            while True:
-                platform = Platform(type='normal')
-                if all(abs(platform.rect.y - other.rect.y) > self.config.MIN_PLATFORM_SPACING for other in platforms):
-                    platforms.append(platform)
-                    self.all_platforms.add(platform)
-                    break
+            platform = self.create_platform()
+
+            # Change vertical spacing over time to increase difficulty by increasing max distance
+            vert_spacing = self.config.MAX_VERT_PLATFORM_SPACING + \
+                           int(self.player.score * self.config.DIFFICULTY_INCREASE_RATE * 100)
+
+            # Ensure vertical spacing between platforms is within the defined range
+            platform.rect.y = last_platform_y - random.randint(self.config.MIN_VERT_PLATFORM_SPACING,
+                                                               vert_spacing)
+
+            # Adjust horizontal position (stay within screen bounds)
+            platform.rect.x = random.randint(0, self.config.WIDTH - platform.rect.width)
+
+            last_platform_y = platform.rect.y
+
+            self.all_platforms.add(platform)
+
+    def create_platform(self):
+        """Create a new platform at a random horizontal position."""
+        platform = Platform(type='normal')
+
+        # Ensure the platform spawns within the screen bounds
+        platform.rect.x = random.randint(0, self.config.WIDTH - platform.rect.width)
+        return platform
 
     def spawn_new_platforms(self):
+        """Spawns new platforms when the player moves upward, ensuring proper vertical distance."""
         top_platform = min(self.all_platforms, key=lambda platform: platform.rect.y, default=None)
 
         if top_platform and top_platform.rect.y > 100:
-            for _ in range(2):
-                platform = Platform(type='normal')
-                platform.rect.y = random.randint(-80, 0)
+            last_platform_y = top_platform.rect.y  # Start from the highest platform's position
+
+            for _ in range(2):  # Add 2 new platforms
+                platform = self.create_platform()
+
+                # Change vertical spacing over time to increase difficulty by increasing max distance
+                vert_spacing = self.config.MAX_VERT_PLATFORM_SPACING + \
+                               int(self.player.score * self.config.DIFFICULTY_INCREASE_RATE * 100)
+
+                # Ensure vertical spacing between platforms is within the defined range
+                platform.rect.y = last_platform_y - random.randint(self.config.MIN_VERT_PLATFORM_SPACING,
+                                                                   vert_spacing)
+
+                # Adjust horizontal position (stay within screen bounds)
+                platform.rect.x = random.randint(0, self.config.WIDTH - platform.rect.width)
+
+                last_platform_y = platform.rect.y
+
                 self.all_platforms.add(platform)
 
     def draw_score(self, screen):
@@ -213,8 +274,11 @@ def main(agent_play=False):
                 running = False
 
         if game_active:
+            # Handle agent play or human play
             if agent_play:
-                action = agent.choose_action()
+                action = agent.choose_action()  # Agent chooses an action
+            else:
+                action = None  # Human play mode, no predefined action
 
             state, reward, done = env.step(screen, action)
 
@@ -241,4 +305,4 @@ def main(agent_play=False):
 
 
 if __name__ == "__main__":
-    main(agent_play=True)
+    main(agent_play=False)
