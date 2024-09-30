@@ -6,14 +6,19 @@ import sys
 from dataclasses import dataclass
 from PIL import Image
 from agent import RandomAgent
+import cv2
 
 
 # 💆‍ Need to integrate the step function so that the agent can play the game.
 # Fixed Action being None ✅
 # Need to add in state representation ✅
 # Get reward working using the scoring change ✅
-# Improve gameplay to make more challenging.
-# Need to change the way the platforms are spawning to make it more difficult.
+# Improve gameplay to make more challenging ✅
+# Need to change the way the platforms are spawning to make it more difficult. ✅
+
+# Put in the DQN Agent to play
+# Log high_scores based on Agent or humans with a blue tick
+# Host somewhere?
 
 @dataclass
 class GameConfig:
@@ -92,9 +97,9 @@ class Player(pygame.sprite.Sprite):
         keys = pygame.key.get_pressed()
         if keys[pygame.K_SPACE] and self.on_platform:
             self.jump()
-        elif keys[pygame.K_RIGHT] or action == 'RIGHT':
+        elif keys[pygame.K_RIGHT] or action == 'RIGHT' or action == 1:
             self.horizontal_vel = self.config.HORIZONTAL_VEL
-        elif keys[pygame.K_LEFT] or action == 'LEFT':
+        elif keys[pygame.K_LEFT] or action == 'LEFT' or action == 2:
             self.horizontal_vel = -self.config.HORIZONTAL_VEL
 
         if self.horizontal_vel > self.config.MAX_HORIZONTAL_VEL:
@@ -141,16 +146,16 @@ class DoodleJumpEnv:
         self.config = GameConfig()
         self.done = False
 
-    def reset(self):
+    def reset(self, screen):
         self.done = False
         self.player = Player()
-        # self.all_sprites = pygame.sprite.Group()
-        # self.all_sprites.add(self.player)
         self.all_platforms = pygame.sprite.Group()
         self.spawn_initial_platforms(4)
         self.player.jump()
 
-        return None
+        state = self.get_rgb_screen(screen)
+
+        return state
 
     def step(self, screen, action=None):
 
@@ -170,10 +175,28 @@ class DoodleJumpEnv:
     def get_rgb_screen(self, screen):
         """Method to return RGB version of the screen."""
         screen_rgb = pygame.surfarray.array3d(screen)  # Capture screen
-        screen_rgb = np.transpose(screen_rgb, (1, 0, 2))  # Convert array to match PIL's format (w, h, RGB)
-        image = Image.fromarray(screen_rgb)   # Convert NumPy array to a PIL Image
-        # image.show()  # Use this to examine
-        return image
+        screen_rgb = np.transpose(screen_rgb, (1, 0, 2))  # Convert array to match (width, height, RGB)
+        processed_img = self._pre_process(screen_rgb)
+        return processed_img  # Return as NumPy array
+
+    def _pre_process(self, img: np.ndarray) -> np.ndarray:
+        """
+        Pre-processes an image to grayscale and resizes it.
+
+        Args:
+            img: The input RGB image to preprocess.
+
+        Returns:
+            A processed image in grayscale, resized to (84, 84).
+        """
+        shape = (1, 84, 84)
+        # Convert to grayscale directly using OpenCV
+        new_frame = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_RGB2GRAY)
+        # Resize to (84, 84)
+        resized_screen = cv2.resize(new_frame, (shape[1], shape[2]), interpolation=cv2.INTER_AREA)
+        # Rescale to [0, 1]
+        new_obs = np.array(resized_screen, dtype=np.float32).reshape(shape) / 255.0
+        return new_obs
 
     def spawn_initial_platforms(self, num):
         """Spawns a fixed number of platforms at the start of the game, with controlled vertical spacing."""
@@ -254,55 +277,3 @@ class Platform(pygame.sprite.Sprite):
         self.rect.y += val
         if self.rect.y > self.config.HEIGHT:
             self.kill()
-
-
-def main(agent_play=False):
-    screen = initialize_game()
-    env = DoodleJumpEnv()
-    if agent_play:
-        agent = RandomAgent()
-    state = env.reset()
-
-    clock = pygame.time.Clock()  # Add clock for FPS control
-
-    running = True
-    game_active = True
-
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-
-        if game_active:
-            # Handle agent play or human play
-            if agent_play:
-                action = agent.choose_action()  # Agent chooses an action
-            else:
-                action = None  # Human play mode, no predefined action
-
-            state, reward, done = env.step(screen, action)
-
-            # Check player alive
-            if not env.player.player_alive:
-                game_active = False
-
-        else:
-            # Clear screen with a white background
-            screen.fill((255, 255, 255))
-            env.draw_score(screen)
-            keys = pygame.key.get_pressed()
-            if keys[pygame.K_SPACE]:  # If we press space_bar we restart
-                game_active = True
-                env.reset()
-
-        pygame.display.flip()  # Display changes on screen
-
-        # Limit to 60 FPS
-        clock.tick(GameConfig().FPS)
-
-    pygame.quit()
-    sys.exit()
-
-
-if __name__ == "__main__":
-    main(agent_play=False)
