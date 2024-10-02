@@ -5,7 +5,7 @@ import torch as T
 
 class DQNAgent:
     def __init__(self, gamma, epsilon, lr, n_actions, input_dims,
-                 mem_size, batch_size, max_steps, eps_min=0.01,
+                 mem_size, batch_size, max_steps, eps_min=0.1,
                  replace=1000, algo=None, env_name=None):
         """Initialize the DQN agent with the provided configuration."""
         self.env_name = env_name

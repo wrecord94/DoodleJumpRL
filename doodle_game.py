@@ -16,9 +16,8 @@ import cv2
 # Improve gameplay to make more challenging ✅
 # Need to change the way the platforms are spawning to make it more difficult. ✅
 
-# Put in the DQN Agent to play
-# Log high_scores based on Agent or humans with a blue tick
-# Host somewhere?
+# Fix bug 🐛 where the jump is influenced by the scrolling.
+# Change the platform spawning to the most simple possible implementation then build from there?
 
 @dataclass
 class GameConfig:
@@ -77,21 +76,22 @@ class Player(pygame.sprite.Sprite):
 
     def scroll_screen(self, platforms):
         score_change = 0  # For scoring we set to zero first
-        if self.rect.top < self.config.HEIGHT // 2:
-            y_change = self.prev_y - self.rect.y
+        y_change = self.prev_y - self.rect.y  # Determine how much the player has moved up
 
-            if y_change > 0:
-                for platform in platforms:
-                    platform.scroll_down(y_change)
+        # Only scroll platforms down if the player has moved upward
+        if y_change > 0 and self.rect.top < self.config.HEIGHT // 2:
+            for platform in platforms:
+                platform.scroll_down(y_change)
 
-                if self.rect.y < self.highest_y:
-                    score_change = (self.highest_y - self.rect.y) / 10  # Scoring
-                    self.score += score_change
-                    self.highest_y = self.rect.y
+            if self.rect.y < self.highest_y:
+                score_change = (
+                                           self.highest_y - self.rect.y) / 10  # Update the score based on the player's highest point
+                self.score += score_change
+                self.highest_y = self.rect.y
 
         self.prev_y = self.rect.y
 
-        return score_change  # Return our change in score for reward
+        return score_change  # Return the change in score for reward
 
     def player_input(self, action):
         keys = pygame.key.get_pressed()

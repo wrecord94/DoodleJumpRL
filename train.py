@@ -7,7 +7,6 @@ from dqn_agent import DQNAgent
 from doodle_game import initialize_game, DoodleJumpEnv, GameConfig
 import matplotlib.pyplot as plt
 import os
-# os.environ['SDL_VIDEODRIVER'] = 'dummy'  # Run Pygame without display on macOS
 
 
 # To do:
@@ -53,9 +52,12 @@ def plot_training_data(log_interval_steps, avg_score_steps, best_scores, epsilon
     plt.savefig(figure_file)
 
 
-def main(agent_play=False, training_bool=False):
+def main(agent_play=False, training_bool=False, watch_training=False):
 
-    max_steps = 100_000
+    if watch_training == False:  # This will trigger Pygame not to render
+        os.environ['SDL_VIDEODRIVER'] = 'dummy'  # Run Pygame without display on macOS
+
+    max_steps = 1_000_000
     log_interval_steps = 1000
 
     # Initialize empty variables for plotting and data saved at the end of training.
@@ -78,7 +80,7 @@ def main(agent_play=False, training_bool=False):
     if agent_play:
         # Instantiate our agent with the args specified above
         agent = DQNAgent(gamma=0.95, epsilon=1, lr=0.0001, input_dims=(1, 84, 84), n_actions=3, mem_size=50000,
-                         eps_min=0.01, batch_size=32, replace=1000, max_steps=10_000,
+                         eps_min=0.01, batch_size=32, replace=1000, max_steps=max_steps,
                          env_name=f"DoodleJumpDQN")
 
     state = env.reset(screen)  # << -------------------------------------------------- Reset the env

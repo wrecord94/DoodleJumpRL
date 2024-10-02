@@ -41,7 +41,7 @@ def main(agent_play=False):
             keys = pygame.key.get_pressed()
             if keys[pygame.K_SPACE]:  # If we press space_bar we restart
                 game_active = True
-                env.reset()
+                env.reset(screen)
 
         pygame.display.flip()  # Display changes on screen
 
