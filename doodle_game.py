@@ -75,23 +75,33 @@ class Player(pygame.sprite.Sprite):
         return reward
 
     def scroll_screen(self, platforms):
-        score_change = 0  # For scoring we set to zero first
+        score_change = 0  # Set to zero initially
         y_change = self.prev_y - self.rect.y  # Determine how much the player has moved up
 
-        # Only scroll platforms down if the player has moved upward
         if y_change > 0 and self.rect.top < self.config.HEIGHT // 2:
             for platform in platforms:
                 platform.scroll_down(y_change)
 
+            # Reward for successfully moving upwards
+            score_change += y_change / 10
+
+            # Additional reward shaping
             if self.rect.y < self.highest_y:
-                score_change = (
-                                           self.highest_y - self.rect.y) / 10  # Update the score based on the player's highest point
-                self.score += score_change
+                score_change += (self.highest_y - self.rect.y) / 10  # Reward height gain
                 self.highest_y = self.rect.y
+
+            # Optional reward: Give a small reward per timestep for survival
+            score_change += 0.01
+
+        # Penalize for falling or failing
+        if self.rect.y > self.config.HEIGHT:
+            score_change -= 1.0  # Large penalty for falling off
 
         self.prev_y = self.rect.y
 
-        return score_change  # Return the change in score for reward
+        self.score += score_change
+
+        return score_change
 
     def player_input(self, action):
         keys = pygame.key.get_pressed()
