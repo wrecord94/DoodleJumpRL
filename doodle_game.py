@@ -232,7 +232,7 @@ class DoodleJumpEnv:
 
     def create_platform(self):
         """Create a new platform at a random horizontal position."""
-        platform = Platform(type='normal')
+        platform = Platform(type='brown')
 
         # Ensure the platform spawns within the screen bounds
         platform.rect.x = random.randint(0, self.config.WIDTH - platform.rect.width)
@@ -276,6 +276,8 @@ class Platform(pygame.sprite.Sprite):
 
         if type == 'normal':
             self.image = pygame.image.load(os.path.join('images', 'platform.png')).convert_alpha()
+        if type == 'brown':
+            self.image = pygame.image.load(os.path.join('images', 'brown_platform.jpg')).convert_alpha()
 
         self.rect = self.image.get_rect()
         self.image = pygame.transform.scale(self.image, (self.rect.width * 0.66, self.rect.height // 2))
